@@ -15,7 +15,6 @@ try {
 	console.trace(err);
 	process.exit(1); // fatal
 }
-passportConfigurator.init();
 
 // Set up the /favicon.ico
 app.use(loopback.favicon());
@@ -27,16 +26,20 @@ app.use(loopback.compress());
 app.use(loopback.token({
 	model: app.models.accessToken
 }));
+app.set('views', __dirname + '/views');
+app.set('view engine', 'ejs');
+
+// boot scripts mount components like REST API
+boot(app, __dirname);
+
+app.use(loopback.cookieParser(app.get('cookieSecret')));
 app.use(loopback.session({
 	secret: 'kitty',
 	saveUninitialized: true,
 	resave: true
 }));
-console.log(app.get('cookieSecret')); // TODO - why is this undefined
-app.use(loopback.cookieParser('246bace2-38cb-4138-85d9-0ae8160b07c8'));
+passportConfigurator.init();
 
-// boot scripts mount components like REST API
-boot(app, __dirname);
 passportConfigurator.setupModels({
 	userModel: app.models.user,
 	userIdentityModel: app.models.userIdentity,
@@ -47,12 +50,22 @@ for (var s in config) {
 	c.session = c.session !== false;
 	passportConfigurator.configureProvider(s, c);
 }
+var ensureLoggedIn = require('connect-ensure-login').ensureLoggedIn;
+
+app.get('/', function(req, res, next) {
+  res.render('index', {user: req.user});
+});
+
+app.get('/auth/account', ensureLoggedIn('/login.html'), function(req, res, next) {
+  res.render('loginProfiles', {user: req.user});
+});
 
 // -- Mount static files here--
 // All static middleware should be registered at the end, as all requests
 // passing the static middleware are hitting the file system
 // Example:
-//   app.use(loopback.static(path.resolve(__dirname', '../client')));
+var path = require('path');
+app.use(loopback.static(path.resolve(__dirname, '../client/public')));
 
 // Requests that get this far won't be handled
 // by any middleware. Convert them into a 404 error
